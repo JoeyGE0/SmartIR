@@ -15,8 +15,11 @@ from .const import CONF_CONTROLLER_DATA, CONF_CONTROLLER_ENTITY, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
-CODES_SOURCE = (
+CODES_SOURCE_UPSTREAM = (
     "https://raw.githubusercontent.com/smartHomeHub/SmartIR/master/codes/{}/{}.json"
+)
+CODES_SOURCE_FORK = (
+    "https://raw.githubusercontent.com/JoeyGE0/SmartIR/master/codes/{}/{}.json"
 )
 
 
@@ -96,11 +99,17 @@ async def async_load_device_data(platform: str, device_code: int) -> dict | None
         _LOGGER.debug(
             "Device JSON %s not found locally, downloading", device_json_path
         )
-        try:
-            await Helper.downloader(
-                CODES_SOURCE.format(platform, device_code), device_json_path
-            )
-        except Exception:
+        for source in (CODES_SOURCE_FORK, CODES_SOURCE_UPSTREAM):
+            try:
+                await Helper.downloader(
+                    source.format(platform, device_code), device_json_path
+                )
+                break
+            except Exception:
+                _LOGGER.debug(
+                    "Device code %s not found at %s", device_code, source
+                )
+        else:
             _LOGGER.error(
                 "Failed to download device code %s for platform %s",
                 device_code,
