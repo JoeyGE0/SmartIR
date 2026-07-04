@@ -1,0 +1,51 @@
+"""Constants for the SmartIR integration."""
+
+DOMAIN = "smartir"
+
+CONF_PLATFORM = "platform"
+CONF_DEVICE_CODE = "device_code"
+CONF_CONTROLLER_DATA = "controller_data"
+CONF_CONTROLLER_ENTITY = "controller_entity"
+CONF_CONTROLLER_TYPE = "controller_type"
+CONF_DELAY = "delay"
+CONF_TEMPERATURE_SENSOR = "temperature_sensor"
+CONF_HUMIDITY_SENSOR = "humidity_sensor"
+CONF_POWER_SENSOR = "power_sensor"
+CONF_POWER_SENSOR_RESTORE_STATE = "power_sensor_restore_state"
+CONF_SOURCE_NAMES = "source_names"
+CONF_DEVICE_CLASS = "device_class"
+CONF_UNIQUE_ID = "unique_id"
+CONF_CHECK_UPDATES = "check_updates"
+CONF_UPDATE_BRANCH = "update_branch"
+
+CONTROLLER_REMOTE = "remote"
+CONTROLLER_MQTT = "mqtt"
+CONTROLLER_LOOKIN = "lookin"
+CONTROLLER_ESPHOME = "esphome"
+CONTROLLER_OTHER = "other"
+
+PLATFORM_CLIMATE = "climate"
+PLATFORM_FAN = "fan"
+PLATFORM_LIGHT = "light"
+PLATFORM_MEDIA_PLAYER = "media_player"
+
+DEFAULT_DELAY = 0.5
+DEFAULT_CLIMATE_NAME = "SmartIR Climate"
+DEFAULT_FAN_NAME = "SmartIR Fan"
+DEFAULT_LIGHT_NAME = "SmartIR Light"
+DEFAULT_MEDIA_PLAYER_NAME = "SmartIR Media Player"
+DEFAULT_DEVICE_CLASS = "tv"
+
+PLATFORMS = [
+    PLATFORM_CLIMATE,
+    PLATFORM_FAN,
+    PLATFORM_LIGHT,
+    PLATFORM_MEDIA_PLAYER,
+]
+
+PLATFORM_DEFAULT_NAMES = {
+    PLATFORM_CLIMATE: DEFAULT_CLIMATE_NAME,
+    PLATFORM_FAN: DEFAULT_FAN_NAME,
+    PLATFORM_LIGHT: DEFAULT_LIGHT_NAME,
+    PLATFORM_MEDIA_PLAYER: DEFAULT_MEDIA_PLAYER_NAME,
+}

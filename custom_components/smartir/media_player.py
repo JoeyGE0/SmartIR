@@ -1,8 +1,5 @@
 import asyncio
-import aiofiles
-import json
 import logging
-import os.path
 
 import voluptuous as vol
 
@@ -10,30 +7,40 @@ from homeassistant.components.media_player import (
     MediaPlayerEntity, PLATFORM_SCHEMA)
 from homeassistant.components.media_player.const import (
     MediaPlayerEntityFeature, MediaType)
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     CONF_NAME, STATE_OFF, STATE_ON, STATE_UNKNOWN)
 import homeassistant.helpers.config_validation as cv
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.restore_state import RestoreEntity
-from . import COMPONENT_ABS_DIR, Helper
+from .const import (
+    CONF_CONTROLLER_DATA,
+    CONF_DELAY,
+    CONF_DEVICE_CLASS,
+    CONF_DEVICE_CODE,
+    CONF_PLATFORM,
+    CONF_POWER_SENSOR,
+    CONF_SOURCE_NAMES,
+    CONF_UNIQUE_ID,
+    DEFAULT_DELAY,
+    DEFAULT_DEVICE_CLASS,
+    DEFAULT_MEDIA_PLAYER_NAME,
+    PLATFORM_MEDIA_PLAYER,
+)
 from .controller import get_controller
+from .helpers import (
+    async_load_device_data,
+    get_device_info,
+    resolve_controller_data,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
-DEFAULT_NAME = "SmartIR Media Player"
-DEFAULT_DEVICE_CLASS = "tv"
-DEFAULT_DELAY = 0.5
-
-CONF_UNIQUE_ID = 'unique_id'
-CONF_DEVICE_CODE = 'device_code'
-CONF_CONTROLLER_DATA = "controller_data"
-CONF_DELAY = "delay"
-CONF_POWER_SENSOR = 'power_sensor'
-CONF_SOURCE_NAMES = 'source_names'
-CONF_DEVICE_CLASS = 'device_class'
-
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
     vol.Optional(CONF_UNIQUE_ID): cv.string,
-    vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
+    vol.Optional(CONF_NAME, default=DEFAULT_MEDIA_PLAYER_NAME): cv.string,
     vol.Required(CONF_DEVICE_CODE): cv.positive_int,
     vol.Required(CONF_CONTROLLER_DATA): cv.string,
     vol.Optional(CONF_DELAY, default=DEFAULT_DELAY): cv.string,
@@ -42,56 +49,76 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
     vol.Optional(CONF_DEVICE_CLASS, default=DEFAULT_DEVICE_CLASS): cv.string
 })
 
-async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
-    """Set up the IR Media Player platform."""
-    device_code = config.get(CONF_DEVICE_CODE)
-    device_files_subdir = os.path.join('codes', 'media_player')
-    device_files_absdir = os.path.join(COMPONENT_ABS_DIR, device_files_subdir)
 
-    if not os.path.isdir(device_files_absdir):
-        os.makedirs(device_files_absdir)
+async def _async_create_media_player_entity(
+    hass: HomeAssistant, config: dict, unique_id: str | None = None
+) -> SmartIRMediaPlayer | None:
+    """Create a media player entity from configuration."""
+    device_code = config[CONF_DEVICE_CODE]
+    device_data = await async_load_device_data(PLATFORM_MEDIA_PLAYER, device_code)
+    if device_data is None:
+        return None
 
-    device_json_filename = str(device_code) + '.json'
-    device_json_path = os.path.join(device_files_absdir, device_json_filename)
+    entity_unique_id = unique_id or config.get(CONF_UNIQUE_ID)
+    device_info = get_device_info(
+        hass,
+        config,
+        entity_unique_id,
+        config.get(CONF_NAME, DEFAULT_MEDIA_PLAYER_NAME),
+    )
 
-    if not os.path.exists(device_json_path):
-        _LOGGER.warning("Couldn't find the device Json file. The component will " \
-                        "try to download it from the GitHub repo.")
+    return SmartIRMediaPlayer(
+        hass=hass,
+        config=config,
+        device_data=device_data,
+        unique_id=entity_unique_id,
+        device_info=device_info,
+    )
 
-        try:
-            codes_source = ("https://raw.githubusercontent.com/"
-                            "smartHomeHub/SmartIR/master/"
-                            "codes/media_player/{}.json")
 
-            await Helper.downloader(codes_source.format(device_code), device_json_path)
-        except Exception:
-            _LOGGER.error("There was an error while downloading the device Json file. " \
-                          "Please check your internet connection or if the device code " \
-                          "exists on GitHub. If the problem still exists please " \
-                          "place the file manually in the proper directory.")
-            return
-
-    try:
-        async with aiofiles.open(device_json_path, mode='r') as j:
-            _LOGGER.debug(f"loading json file {device_json_path}")
-            content = await j.read()
-            device_data = json.loads(content)
-            _LOGGER.debug(f"{device_json_path} file loaded")
-    except Exception:
-        _LOGGER.error("The device JSON file is invalid")
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
+) -> None:
+    """Set up SmartIR media player from a config entry."""
+    if entry.data.get(CONF_PLATFORM) != PLATFORM_MEDIA_PLAYER:
         return
 
-    async_add_entities([SmartIRMediaPlayer(
-        hass, config, device_data
-    )])
+    config = {**entry.data, **entry.options}
+    entity = await _async_create_media_player_entity(hass, config, entry.unique_id)
+    if entity is None:
+        return
+
+    async_add_entities([entity])
+
+
+async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
+    """Set up the IR Media Player platform from YAML."""
+    entity = await _async_create_media_player_entity(hass, config)
+    if entity is None:
+        return
+
+    async_add_entities([entity])
+
 
 class SmartIRMediaPlayer(MediaPlayerEntity, RestoreEntity):
-    def __init__(self, hass, config, device_data):
+    _attr_has_entity_name = True
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        config: dict,
+        device_data: dict,
+        unique_id: str | None = None,
+        device_info: DeviceInfo | None = None,
+    ):
         self.hass = hass
-        self._unique_id = config.get(CONF_UNIQUE_ID)
-        self._name = config.get(CONF_NAME)
+        self._attr_unique_id = unique_id
+        self._attr_name = config.get(CONF_NAME, DEFAULT_MEDIA_PLAYER_NAME)
+        self._attr_device_info = device_info
         self._device_code = config.get(CONF_DEVICE_CODE)
-        self._controller_data = config.get(CONF_CONTROLLER_DATA)
+        self._controller_data = resolve_controller_data(config)
         self._delay = config.get(CONF_DELAY)
         self._power_sensor = config.get(CONF_POWER_SENSOR)
 
@@ -106,7 +133,7 @@ class SmartIRMediaPlayer(MediaPlayerEntity, RestoreEntity):
         self._source = None
         self._support_flags = 0
 
-        self._device_class = config.get(CONF_DEVICE_CLASS)
+        self._device_class = config.get(CONF_DEVICE_CLASS, DEFAULT_DEVICE_CLASS)
 
         #Supported features
         if 'off' in self._commands and self._commands['off'] is not None:
@@ -165,16 +192,6 @@ class SmartIRMediaPlayer(MediaPlayerEntity, RestoreEntity):
     def should_poll(self):
         """Push an update after each command."""
         return True
-
-    @property
-    def unique_id(self):
-        """Return a unique ID."""
-        return self._unique_id
-
-    @property
-    def name(self):
-        """Return the name of the media player."""
-        return self._name
 
     @property
     def device_class(self):

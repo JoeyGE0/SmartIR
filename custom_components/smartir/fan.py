@@ -1,99 +1,122 @@
 import asyncio
-import aiofiles
-import json
 import logging
-import os.path
 
 import voluptuous as vol
 
 from homeassistant.components.fan import (
     FanEntity, FanEntityFeature,
     PLATFORM_SCHEMA, DIRECTION_REVERSE, DIRECTION_FORWARD)
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     CONF_NAME, STATE_OFF, STATE_ON, STATE_UNKNOWN)
-from homeassistant.core import Event, EventStateChangedData, callback
-from homeassistant.helpers.event import async_track_state_change, async_track_state_change_event
+from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.helpers.event import async_track_state_change_event
 import homeassistant.helpers.config_validation as cv
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.util.percentage import (
     ordered_list_item_to_percentage,
     percentage_to_ordered_list_item
 )
-from . import COMPONENT_ABS_DIR, Helper
+from .const import (
+    CONF_CONTROLLER_DATA,
+    CONF_DELAY,
+    CONF_DEVICE_CODE,
+    CONF_PLATFORM,
+    CONF_POWER_SENSOR,
+    CONF_UNIQUE_ID,
+    DEFAULT_DELAY,
+    DEFAULT_FAN_NAME,
+    PLATFORM_FAN,
+)
 from .controller import get_controller
+from .helpers import (
+    async_load_device_data,
+    get_device_info,
+    resolve_controller_data,
+)
 
 _LOGGER = logging.getLogger(__name__)
-
-DEFAULT_NAME = "SmartIR Fan"
-DEFAULT_DELAY = 0.5
-
-CONF_UNIQUE_ID = 'unique_id'
-CONF_DEVICE_CODE = 'device_code'
-CONF_CONTROLLER_DATA = "controller_data"
-CONF_DELAY = "delay"
-CONF_POWER_SENSOR = 'power_sensor'
 
 SPEED_OFF = "off"
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
     vol.Optional(CONF_UNIQUE_ID): cv.string,
-    vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
+    vol.Optional(CONF_NAME, default=DEFAULT_FAN_NAME): cv.string,
     vol.Required(CONF_DEVICE_CODE): cv.positive_int,
     vol.Required(CONF_CONTROLLER_DATA): cv.string,
     vol.Optional(CONF_DELAY, default=DEFAULT_DELAY): cv.string,
     vol.Optional(CONF_POWER_SENSOR): cv.entity_id
 })
 
-async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
-    """Set up the IR Fan platform."""
-    device_code = config.get(CONF_DEVICE_CODE)
-    device_files_subdir = os.path.join('codes', 'fan')
-    device_files_absdir = os.path.join(COMPONENT_ABS_DIR, device_files_subdir)
 
-    if not os.path.isdir(device_files_absdir):
-        os.makedirs(device_files_absdir)
+async def _async_create_fan_entity(
+    hass: HomeAssistant, config: dict, unique_id: str | None = None
+) -> SmartIRFan | None:
+    """Create a fan entity from configuration."""
+    device_code = config[CONF_DEVICE_CODE]
+    device_data = await async_load_device_data(PLATFORM_FAN, device_code)
+    if device_data is None:
+        return None
 
-    device_json_filename = str(device_code) + '.json'
-    device_json_path = os.path.join(device_files_absdir, device_json_filename)
+    entity_unique_id = unique_id or config.get(CONF_UNIQUE_ID)
+    device_info = get_device_info(
+        hass, config, entity_unique_id, config.get(CONF_NAME, DEFAULT_FAN_NAME)
+    )
 
-    if not os.path.exists(device_json_path):
-        _LOGGER.warning("Couldn't find the device Json file. The component will " \
-                        "try to download it from the GitHub repo.")
+    return SmartIRFan(
+        hass=hass,
+        config=config,
+        device_data=device_data,
+        unique_id=entity_unique_id,
+        device_info=device_info,
+    )
 
-        try:
-            codes_source = ("https://raw.githubusercontent.com/"
-                            "smartHomeHub/SmartIR/master/"
-                            "codes/fan/{}.json")
 
-            await Helper.downloader(codes_source.format(device_code), device_json_path)
-        except Exception:
-            _LOGGER.error("There was an error while downloading the device Json file. " \
-                          "Please check your internet connection or if the device code " \
-                          "exists on GitHub. If the problem still exists please " \
-                          "place the file manually in the proper directory.")
-            return
-
-    try:
-        async with aiofiles.open(device_json_path, mode='r') as j:
-            _LOGGER.debug(f"loading json file {device_json_path}")
-            content = await j.read()
-            device_data = json.loads(content)
-            _LOGGER.debug(f"{device_json_path} file loaded")
-    except Exception:
-        _LOGGER.error("The device JSON file is invalid")
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
+) -> None:
+    """Set up SmartIR fan from a config entry."""
+    if entry.data.get(CONF_PLATFORM) != PLATFORM_FAN:
         return
 
-    async_add_entities([SmartIRFan(
-        hass, config, device_data
-    )])
+    config = {**entry.data, **entry.options}
+    entity = await _async_create_fan_entity(hass, config, entry.unique_id)
+    if entity is None:
+        return
+
+    async_add_entities([entity])
+
+
+async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
+    """Set up the IR Fan platform from YAML."""
+    entity = await _async_create_fan_entity(hass, config)
+    if entity is None:
+        return
+
+    async_add_entities([entity])
+
 
 class SmartIRFan(FanEntity, RestoreEntity):
-    def __init__(self, hass, config, device_data):
+    _attr_has_entity_name = True
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        config: dict,
+        device_data: dict,
+        unique_id: str | None = None,
+        device_info: DeviceInfo | None = None,
+    ):
         self.hass = hass
-        self._unique_id = config.get(CONF_UNIQUE_ID)
-        self._name = config.get(CONF_NAME)
+        self._attr_unique_id = unique_id
+        self._attr_name = config.get(CONF_NAME, DEFAULT_FAN_NAME)
+        self._attr_device_info = device_info
         self._device_code = config.get(CONF_DEVICE_CODE)
-        self._controller_data = config.get(CONF_CONTROLLER_DATA)
+        self._controller_data = resolve_controller_data(config)
         self._delay = config.get(CONF_DELAY)
         self._power_sensor = config.get(CONF_POWER_SENSOR)
 
@@ -154,19 +177,10 @@ class SmartIRFan(FanEntity, RestoreEntity):
             if 'last_on_speed' in last_state.attributes:
                 self._last_on_speed = last_state.attributes['last_on_speed']
 
-            if self._power_sensor:
-                async_track_state_change_event(self.hass, self._power_sensor, 
-                                               self._async_power_sensor_changed)
-
-    @property
-    def unique_id(self):
-        """Return a unique ID."""
-        return self._unique_id
-
-    @property
-    def name(self):
-        """Return the display name of the fan."""
-        return self._name
+        if self._power_sensor:
+            async_track_state_change_event(
+                self.hass, self._power_sensor, self._async_power_sensor_changed
+            )
 
     @property
     def state(self):

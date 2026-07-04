@@ -11,15 +11,23 @@ import struct
 import voluptuous as vol
 
 from aiohttp import ClientSession
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     ATTR_FRIENDLY_NAME, __version__ as current_ha_version)
 import homeassistant.helpers.config_validation as cv
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import ConfigType
+
+from .const import (
+    CONF_CHECK_UPDATES,
+    CONF_UPDATE_BRANCH,
+    DOMAIN,
+    PLATFORMS,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
-DOMAIN = 'smartir'
-VERSION = '1.18.1'
+VERSION = '1.19.0'
 MANIFEST_URL = (
     "https://raw.githubusercontent.com/"
     "smartHomeHub/SmartIR/{}/"
@@ -31,9 +39,6 @@ REMOTE_BASE_URL = (
 COMPONENT_ABS_DIR = os.path.dirname(
     os.path.abspath(__file__))
 
-CONF_CHECK_UPDATES = 'check_updates'
-CONF_UPDATE_BRANCH = 'update_branch'
-
 CONFIG_SCHEMA = vol.Schema({
     DOMAIN: vol.Schema({
         vol.Optional(CONF_CHECK_UPDATES, default=True): cv.boolean,
@@ -43,7 +48,12 @@ CONFIG_SCHEMA = vol.Schema({
 }, extra=vol.ALLOW_EXTRA)
 
 async def async_setup(hass, config):
-    """Set up the SmartIR component."""
+    """Set up the SmartIR component.
+
+    YAML platform entries (climate/fan/light/media_player) continue to work
+    alongside UI config entries. The optional smartir: block only controls
+    update-check services.
+    """
     conf = config.get(DOMAIN)
 
     if conf is None:
@@ -65,6 +75,25 @@ async def async_setup(hass, config):
         await _update(hass, update_branch, False, False)
 
     return True
+
+
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Set up SmartIR from a config entry."""
+    entry.async_on_unload(entry.add_update_listener(async_reload_entry))
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    return True
+
+
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Unload a SmartIR config entry."""
+    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+
+async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Reload SmartIR when options change."""
+    await async_unload_entry(hass, entry)
+    await async_setup_entry(hass, entry)
+
 
 async def _update(hass, branch, do_update=False, notify_if_latest=True):
     try:

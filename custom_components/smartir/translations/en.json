@@ -1,0 +1,59 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Choose SmartIR device type",
+        "description": "Select the kind of infrared device you want to configure.",
+        "data": {
+          "platform": "Device type"
+        }
+      },
+      "device": {
+        "title": "Configure SmartIR {platform}",
+        "description": "Set up your infrared device. When using a remote entity, SmartIR links to the same physical device (e.g. Broadlink RM pro).",
+        "data": {
+          "name": "Name",
+          "device_code": "Device code",
+          "controller_type": "Controller type",
+          "controller_entity": "Remote entity",
+          "controller_data": "Controller data",
+          "delay": "Command delay (seconds)",
+          "temperature_sensor": "Temperature sensor",
+          "humidity_sensor": "Humidity sensor",
+          "power_sensor": "Power sensor",
+          "power_sensor_restore_state": "Restore last mode when power sensor turns on",
+          "device_class": "Device class",
+          "source_names": "Source names (JSON)"
+        }
+      }
+    },
+    "error": {
+      "invalid_device_code": "Device code not found. Check the code or place the JSON file in the codes folder."
+    },
+    "abort": {
+      "already_configured": "This device is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Reconfigure SmartIR",
+        "description": "Update device settings. Changes apply after the integration reloads.",
+        "data": {
+          "name": "Name",
+          "device_code": "Device code",
+          "controller_type": "Controller type",
+          "controller_entity": "Remote entity",
+          "controller_data": "Controller data",
+          "delay": "Command delay (seconds)",
+          "temperature_sensor": "Temperature sensor",
+          "humidity_sensor": "Humidity sensor",
+          "power_sensor": "Power sensor",
+          "power_sensor_restore_state": "Restore last mode when power sensor turns on",
+          "device_class": "Device class",
+          "source_names": "Source names (JSON)"
+        }
+      }
+    }
+  }
+}
