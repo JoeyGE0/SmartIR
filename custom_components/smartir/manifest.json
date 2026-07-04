@@ -1,7 +1,7 @@
 {
   "domain": "smartir",
   "name": "SmartIR",
-  "documentation": "https://github.com/smartHomeHub/SmartIR",
+  "documentation": "https://github.com/JoeyGE0/smartir-ui",
   "config_flow": true,
   "dependencies": [],
   "codeowners": ["@smartHomeHub"],
