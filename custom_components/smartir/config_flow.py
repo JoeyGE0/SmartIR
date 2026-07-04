@@ -134,16 +134,15 @@ def _base_schema(platform: str, defaults: dict[str, Any] | None = None) -> vol.S
     default_name = defaults.get(CONF_NAME, PLATFORM_DEFAULT_NAMES[platform])
 
     device_code = defaults.get(CONF_DEVICE_CODE)
-    device_code_field = (
-        vol.Required(CONF_DEVICE_CODE, default=device_code)
-        if device_code is not None
-        else vol.Required(CONF_DEVICE_CODE)
-    )
+    if device_code is not None:
+        device_code_field = vol.Required(CONF_DEVICE_CODE, default=str(device_code))
+    else:
+        device_code_field = vol.Required(CONF_DEVICE_CODE)
 
     fields = {
         vol.Required(CONF_NAME, default=default_name): str,
-        device_code_field: NumberSelector(
-            NumberSelectorConfig(min=1, max=99999, mode=NumberSelectorMode.BOX)
+        device_code_field: TextSelector(
+            TextSelectorConfig(type=selector.TextSelectorType.TEXT)
         ),
         vol.Optional(CONF_DELAY, default=defaults.get(CONF_DELAY, DEFAULT_DELAY)): NumberSelector(
             NumberSelectorConfig(min=0, max=10, step=0.1, mode=NumberSelectorMode.BOX)
@@ -238,12 +237,12 @@ def _clean_optional_entities(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
-def _entry_data(platform: str, user_input: dict[str, Any]) -> dict[str, Any]:
+def _entry_data(platform: str, user_input: dict[str, Any], device_code: int) -> dict[str, Any]:
     controller = _resolve_controller_from_input(user_input)
     data: dict[str, Any] = {
         CONF_PLATFORM: platform,
         CONF_NAME: user_input[CONF_NAME],
-        CONF_DEVICE_CODE: int(user_input[CONF_DEVICE_CODE]),
+        CONF_DEVICE_CODE: device_code,
         CONF_CONTROLLER_TYPE: user_input[CONF_CONTROLLER_TYPE],
         CONF_CONTROLLER_DATA: controller,
         CONF_DELAY: float(user_input.get(CONF_DELAY, DEFAULT_DELAY)),
@@ -314,21 +313,29 @@ class SmartIRConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         assert platform is not None
 
         if user_input is not None:
-            device_code = int(user_input[CONF_DEVICE_CODE])
-            controller = _resolve_controller_from_input(user_input)
-
-            device_data = await async_load_device_data(platform, device_code)
-            if device_data is None:
+            try:
+                device_code = int(str(user_input[CONF_DEVICE_CODE]).strip())
+                if device_code < 1:
+                    raise ValueError
+            except (TypeError, ValueError):
                 errors["base"] = "invalid_device_code"
-            else:
-                unique_id = build_unique_id(platform, device_code, controller)
-                await self.async_set_unique_id(unique_id)
-                self._abort_if_unique_id_configured()
+                device_code = None
 
-                return self.async_create_entry(
-                    title=user_input[CONF_NAME],
-                    data=_entry_data(platform, user_input),
-                )
+            if device_code is not None:
+                controller = _resolve_controller_from_input(user_input)
+
+                device_data = await async_load_device_data(platform, device_code)
+                if device_data is None:
+                    errors["base"] = "invalid_device_code"
+                else:
+                    unique_id = build_unique_id(platform, device_code, controller)
+                    await self.async_set_unique_id(unique_id)
+                    self._abort_if_unique_id_configured()
+
+                    return self.async_create_entry(
+                        title=user_input[CONF_NAME],
+                        data=_entry_data(platform, user_input, device_code),
+                    )
 
         return self.async_show_form(
             step_id="device",
@@ -361,9 +368,20 @@ class SmartIROptionsFlowHandler(config_entries.OptionsFlow):
         defaults = {**self._config_entry.data, **self._config_entry.options}
 
         if user_input is not None:
+            try:
+                device_code = int(str(user_input[CONF_DEVICE_CODE]).strip())
+                if device_code < 1:
+                    raise ValueError
+            except (TypeError, ValueError):
+                return self.async_show_form(
+                    step_id="init",
+                    data_schema=_schema_for_platform(platform, defaults),
+                    errors={"base": "invalid_device_code"},
+                )
+
             return self.async_create_entry(
                 title="",
-                data=_entry_data(platform, user_input),
+                data=_entry_data(platform, user_input, device_code),
             )
 
         return self.async_show_form(
