@@ -37,6 +37,7 @@ from .controller import get_controller
 from .helpers import (
     async_load_device_data,
     get_device_info,
+    normalize_delay,
     resolve_controller_data,
 )
 
@@ -150,7 +151,7 @@ class SmartIRLight(LightEntity, RestoreEntity):
         self._attr_device_info = device_info
         self._device_code = config.get(CONF_DEVICE_CODE)
         self._controller_data = resolve_controller_data(config)
-        self._delay = config.get(CONF_DELAY)
+        self._delay = normalize_delay(config.get(CONF_DELAY))
         self._power_sensor = config.get(CONF_POWER_SENSOR)
 
         self._manufacturer = device_data["manufacturer"]

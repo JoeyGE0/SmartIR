@@ -47,13 +47,14 @@ from .const import (
     DEFAULT_DELAY,
     DEFAULT_DEVICE_CLASS,
     DOMAIN,
+    MIN_DELAY,
     PLATFORM_CLIMATE,
     PLATFORM_DEFAULT_NAMES,
     PLATFORM_FAN,
     PLATFORM_LIGHT,
     PLATFORM_MEDIA_PLAYER,
 )
-from .helpers import async_load_device_data, build_unique_id
+from .helpers import async_load_device_data, build_unique_id, normalize_delay
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -143,7 +144,9 @@ def _base_schema(platform: str, defaults: dict[str, Any] | None = None) -> vol.S
         vol.Required(CONF_NAME, default=default_name): str,
         device_code_field: str,
         vol.Optional(CONF_DELAY, default=defaults.get(CONF_DELAY, DEFAULT_DELAY)): NumberSelector(
-            NumberSelectorConfig(min=0, max=10, step=0.1, mode=NumberSelectorMode.BOX)
+            NumberSelectorConfig(
+                min=MIN_DELAY, max=10, step=0.1, mode=NumberSelectorMode.BOX
+            )
         ),
     }
     fields.update(
@@ -243,7 +246,7 @@ def _entry_data(platform: str, user_input: dict[str, Any], device_code: int) -> 
         CONF_DEVICE_CODE: device_code,
         CONF_CONTROLLER_TYPE: user_input[CONF_CONTROLLER_TYPE],
         CONF_CONTROLLER_DATA: controller,
-        CONF_DELAY: float(user_input.get(CONF_DELAY, DEFAULT_DELAY)),
+        CONF_DELAY: normalize_delay(user_input.get(CONF_DELAY, DEFAULT_DELAY)),
     }
 
     if user_input.get(CONF_POWER_SENSOR):

@@ -35,6 +35,7 @@ from .controller import get_controller
 from .helpers import (
     async_load_device_data,
     get_device_info,
+    normalize_delay,
     resolve_controller_data,
 )
 
@@ -129,7 +130,7 @@ class SmartIRClimate(ClimateEntity, RestoreEntity):
         self._attr_name = config.get(CONF_NAME, DEFAULT_CLIMATE_NAME)
         self._device_code = config[CONF_DEVICE_CODE]
         self._controller_data = resolve_controller_data(config)
-        self._delay = config.get(CONF_DELAY, DEFAULT_DELAY)
+        self._delay = normalize_delay(config.get(CONF_DELAY, DEFAULT_DELAY))
         self._temperature_sensor = config.get(CONF_TEMPERATURE_SENSOR)
         self._humidity_sensor = config.get(CONF_HUMIDITY_SENSOR)
         self._power_sensor = config.get(CONF_POWER_SENSOR)

@@ -13,7 +13,7 @@ from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
 
 from . import COMPONENT_ABS_DIR, Helper
-from .const import CONF_CONTROLLER_DATA, CONF_CONTROLLER_ENTITY, DOMAIN
+from .const import CONF_CONTROLLER_DATA, CONF_CONTROLLER_ENTITY, DOMAIN, MIN_DELAY
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -23,6 +23,15 @@ CODES_SOURCE_FORK = (
 CODES_SOURCE_UPSTREAM = (
     "https://raw.githubusercontent.com/smartHomeHub/SmartIR/master/codes/{}/{}.json"
 )
+
+
+def normalize_delay(delay: float | str | None) -> float:
+    """Return a safe command delay."""
+    try:
+        value = float(delay)
+    except (TypeError, ValueError):
+        value = MIN_DELAY
+    return max(value, MIN_DELAY)
 
 
 def resolve_controller_data(config: dict) -> str:
