@@ -8,9 +8,9 @@
   "requirements": ["aiofiles>=0.6.0"],
   "homeassistant": "2025.5.0",
   "iot_class": "local_polling",
-  "version": "1.19.4",
+  "version": "1.19.5",
   "updater": {
-    "version": "1.19.4",
+    "version": "1.19.5",
     "releaseNotes": "-- Adds UI config flow and Broadlink device linking",
     "files": [
       "__init__.py",

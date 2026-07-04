@@ -354,16 +354,12 @@ class SmartIRConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 class SmartIROptionsFlowHandler(config_entries.OptionsFlow):
     """Handle SmartIR options."""
 
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        """Initialize options flow."""
-        self._config_entry = config_entry
-
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
         """Manage SmartIR options."""
-        platform = self._config_entry.data[CONF_PLATFORM]
-        defaults = {**self._config_entry.data, **self._config_entry.options}
+        platform = self.config_entry.data[CONF_PLATFORM]
+        defaults = {**self.config_entry.data, **self.config_entry.options}
 
         if user_input is not None:
             try:

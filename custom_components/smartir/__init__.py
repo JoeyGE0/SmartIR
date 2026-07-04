@@ -27,7 +27,7 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-VERSION = '1.19.4'
+VERSION = '1.19.5'
 MANIFEST_URL = (
     "https://raw.githubusercontent.com/"
     "smartHomeHub/SmartIR/{}/"
