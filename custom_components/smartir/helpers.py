@@ -3,6 +3,8 @@
 import json
 import logging
 import os.path
+import asyncio
+import shutil
 
 import aiofiles
 
@@ -15,11 +17,11 @@ from .const import CONF_CONTROLLER_DATA, CONF_CONTROLLER_ENTITY, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
-CODES_SOURCE_UPSTREAM = (
-    "https://raw.githubusercontent.com/smartHomeHub/SmartIR/master/codes/{}/{}.json"
-)
 CODES_SOURCE_FORK = (
     "https://raw.githubusercontent.com/JoeyGE0/SmartIR/master/codes/{}/{}.json"
+)
+CODES_SOURCE_UPSTREAM = (
+    "https://raw.githubusercontent.com/smartHomeHub/SmartIR/master/codes/{}/{}.json"
 )
 
 
@@ -33,11 +35,7 @@ def resolve_controller_data(config: dict) -> str:
 def get_controller_device_info(
     hass: HomeAssistant, controller_entity_id: str
 ) -> DeviceInfo | None:
-    """Return DeviceInfo for the physical device behind a controller entity.
-
-    Re-using identifiers and connections attaches SmartIR entities to the
-    same device card as integrations like Broadlink or UniFi Network.
-    """
+    """Return DeviceInfo for the physical device behind a controller entity."""
     if not controller_entity_id or "." not in controller_entity_id:
         return None
 
@@ -85,17 +83,49 @@ def get_device_info(
     )
 
 
+def _device_json_paths(platform: str, device_code: int) -> list[str]:
+    """Return candidate local paths for a device JSON file."""
+    filename = f"{device_code}.json"
+    return [
+        os.path.join(COMPONENT_ABS_DIR, "codes", platform, filename),
+        os.path.join(COMPONENT_ABS_DIR, "bundled_codes", platform, filename),
+    ]
+
+
+async def _seed_device_json(platform: str, device_code: int) -> str | None:
+    """Copy bundled code into the writable codes directory if available."""
+    target_dir = os.path.join(COMPONENT_ABS_DIR, "codes", platform)
+    target_path = os.path.join(target_dir, f"{device_code}.json")
+    bundled_path = os.path.join(
+        COMPONENT_ABS_DIR, "bundled_codes", platform, f"{device_code}.json"
+    )
+
+    if os.path.exists(target_path):
+        return target_path
+
+    if not os.path.exists(bundled_path):
+        return None
+
+    os.makedirs(target_dir, exist_ok=True)
+    await asyncio.to_thread(shutil.copy2, bundled_path, target_path)
+    return target_path
+
+
 async def async_load_device_data(platform: str, device_code: int) -> dict | None:
     """Load device JSON from local codes or download from GitHub."""
-    device_files_subdir = os.path.join("codes", platform)
-    device_files_absdir = os.path.join(COMPONENT_ABS_DIR, device_files_subdir)
+    await _seed_device_json(platform, device_code)
 
-    if not os.path.isdir(device_files_absdir):
-        os.makedirs(device_files_absdir)
+    device_json_path = None
+    for candidate in _device_json_paths(platform, device_code):
+        if os.path.exists(candidate):
+            device_json_path = candidate
+            break
 
-    device_json_path = os.path.join(device_files_absdir, f"{device_code}.json")
+    if device_json_path is None:
+        target_dir = os.path.join(COMPONENT_ABS_DIR, "codes", platform)
+        os.makedirs(target_dir, exist_ok=True)
+        device_json_path = os.path.join(target_dir, f"{device_code}.json")
 
-    if not os.path.exists(device_json_path):
         _LOGGER.debug(
             "Device JSON %s not found locally, downloading", device_json_path
         )

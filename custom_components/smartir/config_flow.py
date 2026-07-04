@@ -141,9 +141,7 @@ def _base_schema(platform: str, defaults: dict[str, Any] | None = None) -> vol.S
 
     fields = {
         vol.Required(CONF_NAME, default=default_name): str,
-        device_code_field: TextSelector(
-            TextSelectorConfig(type=selector.TextSelectorType.TEXT)
-        ),
+        device_code_field: str,
         vol.Optional(CONF_DELAY, default=defaults.get(CONF_DELAY, DEFAULT_DELAY)): NumberSelector(
             NumberSelectorConfig(min=0, max=10, step=0.1, mode=NumberSelectorMode.BOX)
         ),
